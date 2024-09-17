@@ -1,11 +1,14 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query
 from pyspark import SparkConf
 from pyspark.sql import SparkSession
-from typing import List
+from typing import List, Dict
 from pyspark.sql import functions as F
 from pyspark.sql.functions import lit
+from pydantic import BaseModel
 
 from scripts.homogenize import homogenize_columns
+from scripts.homogenize import homogenize_across_files
+
 from scripts.similarity import find_similar_columns
 
 import shutil
@@ -21,6 +24,10 @@ UPLOAD_DIR = "/almacenNFS/Spark/Datagenization/csv_storage"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
+class FileColumnsMap(BaseModel):
+    file_columns: Dict[str, List[str]]
+
+
 def create_spark_session():
     SPARK_MASTER_URL = os.getenv("SPARK_MASTER_URL", "spark://10.195.34.24:7077")
     configura = SparkConf()
@@ -33,38 +40,48 @@ def create_spark_session():
     return spark
 
 
+def read_and_select_columns(filename: str, columns: List[str]):
+    spark = create_spark_session()
+    filepath = f"file:///{UPLOAD_DIR}/{filename}"
+
+    if not os.path.exists(os.path.join(UPLOAD_DIR, filename)):
+        raise HTTPException(status_code=404, detail=f"Archivo {filename} no encontrado.")
+
+    df = spark.read.format("csv").option("header", "true").load(filepath)
+
+    for column in columns:
+        if column not in df.columns:
+            df = df.withColumn(column, lit(None))
+
+    return df.select(columns)
+
+
 def read_csv_to_spark_df(filenames: List[str]):
     spark = create_spark_session()
 
     all_dataframes = []
     all_columns = set()
 
-    # Primero, leer los archivos y acumular todas las columnas únicas
     for filename in filenames:
         filepath = f"file:///{UPLOAD_DIR}/{filename}"
         if not os.path.exists(os.path.join(UPLOAD_DIR, filename)):
             return {"error": f"Archivo {filename} no encontrado."}
 
-        # Leer el archivo CSV
         df = spark.read.format("csv").option("header", "true").load(filepath)
         all_columns.update(df.columns)
         all_dataframes.append(df)
 
-    # Crear un esquema común con todas las columnas
     all_columns = list(all_columns)
 
     aligned_dataframes = []
     for df in all_dataframes:
-        # Agregar columnas faltantes con valores nulos
         for column in all_columns:
             if column not in df.columns:
                 df = df.withColumn(column, lit(None))
 
-        # Asegurarse de que las columnas estén en el orden correcto
         df = df.select(all_columns)
         aligned_dataframes.append(df)
 
-    # Unir todos los DataFrames
     if aligned_dataframes:
         combined_df = aligned_dataframes[0]
         for df in aligned_dataframes[1:]:
@@ -117,23 +134,17 @@ def read_csv_columns(filenames: List[str] = Query(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/homogenize", summary="Homogenize CSV Files",
-         description="Homogenizes columns in multiple CSV files and returns the result.")
-def homogenize(filenames: List[str] = Query(...)):
+@app.post("/homogenize", summary="Homogenize Specific Columns from Multiple CSV Files")
+def homogenize_files(file_columns_map: FileColumnsMap):
     try:
-        df = read_csv_to_spark_df(filenames)
+        combined_df = homogenize_across_files(file_columns_map.file_columns)
 
-        if isinstance(df, dict) and "error" in df:
-            raise HTTPException(status_code=404, detail=df["error"])
+        if combined_df is None:
+            raise HTTPException(status_code=500, detail="No se pudo combinar los archivos.")
 
-        similar_columns = find_similar_columns(df.columns, 40)
-
-        homogenized_df = homogenize_columns(df, similar_columns)
-
-        pandas_df = homogenized_df.toPandas()
+        pandas_df = combined_df.toPandas()
         result = pandas_df.to_dict(orient="records")
 
         return result
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
