@@ -1,4 +1,5 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Form
+from fastapi.middleware.cors import CORSMiddleware
 from pyspark import SparkConf
 from pyspark.sql import SparkSession
 from typing import List, Dict
@@ -18,6 +19,14 @@ app = FastAPI(
     title="Spark API",
     description="API para ejecutar trabajos en Spark y leer archivos CSV.",
     version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 UPLOAD_DIR = "../csv_storage"
@@ -93,14 +102,15 @@ def read_csv_to_spark_df(filenames: List[str]):
 
 @app.post("/upload_csv", summary="Upload CSV File",
           description="Uploads a CSV file to the server and saves it to the specified directory.")
-async def upload_csv(files: list[UploadFile] = File(...)):
+async def upload_csv(files: List[UploadFile] = File(...), session_id: str = Form(...)):
     try:
+        os.makedirs(UPLOAD_DIR + "/" + session_id, exist_ok=True)
         uploaded_files = []
         for file in files:
             if not file.filename.endswith(".csv"):
                 raise HTTPException(status_code=400, detail=f"El archivo {file.filename} debe ser un CSV.")
 
-            file_path = os.path.join(UPLOAD_DIR, file.filename)
+            file_path = os.path.join(UPLOAD_DIR + "/" + session_id, file.filename)
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
 
