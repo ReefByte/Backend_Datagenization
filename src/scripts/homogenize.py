@@ -1,18 +1,20 @@
-from pyspark.sql.functions import col, coalesce
+from http.client import HTTPException
+
+from pyspark.sql.functions import col, coalesce, lit
 from pyspark import SparkConf
 from pyspark.sql import SparkSession
 
 from typing import Dict, List
 import os
 
-UPLOAD_DIR = "/almacenNFS/Spark/Datagenization/csv_storage"
+UPLOAD_DIR = "../../csv_storage"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 def create_spark_session():
     SPARK_MASTER_URL = os.getenv("SPARK_MASTER_URL", "spark://10.195.34.24:7077")
     configura = SparkConf()
     configura.setMaster(SPARK_MASTER_URL)
-    configura.set('spark.local.dir', '/almacenNFS/Spark/Datagenization/spark_files')
+    configura.set('spark.local.dir', '../../spark_files')
     configura.setAppName("Datagenization")
 
     spark = SparkSession.builder.config(conf=configura).getOrCreate()
