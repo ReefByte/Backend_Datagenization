@@ -20,7 +20,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
-UPLOAD_DIR = "/almacenNFS/Spark/Datagenization/csv_storage"
+UPLOAD_DIR = "../csv_storage"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
@@ -32,7 +32,7 @@ def create_spark_session():
     SPARK_MASTER_URL = os.getenv("SPARK_MASTER_URL", "spark://10.195.34.24:7077")
     configura = SparkConf()
     configura.setMaster(SPARK_MASTER_URL)
-    configura.set('spark.local.dir', '/almacenNFS/Spark/Datagenization/spark_files')
+    configura.set('spark.local.dir', '../spark_files')
     configura.setAppName("Datagenization")
 
     spark = SparkSession.builder.config(conf=configura).getOrCreate()
