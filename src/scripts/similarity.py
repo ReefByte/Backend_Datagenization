@@ -1,8 +1,8 @@
 from pyspark.sql.functions import col, coalesce
 from fuzzywuzzy import process, fuzz
 
+
 def find_similar_columns(columns, threshold=80):
-    
     column_mapping = {}
     used_columns = set()
 
