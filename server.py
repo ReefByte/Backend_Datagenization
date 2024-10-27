@@ -279,3 +279,7 @@ def deleteFiles(session_id: str = Query(...)):
         return {"detail": f"Directorio {session_id} eliminado con éxito."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
+##
