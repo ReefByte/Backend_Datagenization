@@ -15,6 +15,9 @@ from pyspark.ml.feature import PCA
 from pyspark.ml.linalg import Vectors
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.feature import StringIndexer
+import matplotlib
+
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import base64
 from io import BytesIO
@@ -56,10 +59,11 @@ def final_recommendations(session_id: str):
         if file_info.type == FileType.File and file_info.path.endswith(f'{session_id}_combined.csv'):
             filepath = f"hdfs://{file_info.path}"  # Agregar prefijo hdfs:// para Spark
             df = spark.read.format("csv").option("header", "true").load(filepath)
-    result_body = check_null_values(df)
+    recommendations_body = check_null_values(df)
+    recommendations_body = check_outliers(df, recommendations_body)
     # result_body["outlier_img"] = check_outliers(df)
     # pca_analysis()
-    return result_body
+    return recommendations_body
 
 
 def check_null_values(df):
@@ -91,7 +95,7 @@ def get_numeric_columns(df):
     return df_convertido
 
 
-def check_outliers(df):
+def check_outliers(df, recommendations_body):
     df_numeric = get_numeric_columns(df)
     for column in df_numeric.columns:
         try:
@@ -127,11 +131,10 @@ def check_outliers(df):
             plt.close()
 
             print(f"Imagen en base64 para la columna {column}: {img_base64}")
-
-            return img_base64
-
+            recommendations_body[column]["outliers"] = img_base64
         except  Exception as e:
             print(f"ERROR CON COLUMNA {column} {e}")
+    return recommendations_body
 
 
 def get_categorical_columns(df):
