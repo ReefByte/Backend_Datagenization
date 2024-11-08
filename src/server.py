@@ -331,7 +331,6 @@ def deleteFiles(session_id: str = Query(...)):
          description="Makes recommendations of null values and outliers after the homogenization.")
 def generate_final_recomendations(session_id: str = Query(...)):
     try:
-        print("TRY")
         recommendations = final_recommendations(session_id)
         return {"recommendations": recommendations}
     except Exception as e:
